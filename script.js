@@ -11,19 +11,59 @@ class CircularSlider {
         this.velocity = 0;
         this.mouse = { x: 0, y: 0 };
         
+        // Sizes object
+        this.sizes = {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+        
         // Configuración del slider
         this.imageCount = 8;
         this.imageSpacing = (Math.PI * 2) / this.imageCount;
         this.aspectRatio = 16/9;
         
-        // Configuración responsive
-        this.updateResponsiveSettings();
+        // Inicializar cameraDistance como null para detectar primera vez
+        this.cameraDistance = null;
+        
+        // Calcular valores iniciales basados en viewport
+        this.calculateResponsiveSizes();
         
         this.init();
         this.loadImages();
         this.setupEventListeners();
         this.setupControls();
         this.animate();
+    }
+    
+    calculateResponsiveSizes() {
+        // Hacer el slider verdaderamente responsive al ancho
+        const aspectRatio = this.sizes.width / this.sizes.height;
+        
+        // Escalar todo basado en el ancho de la pantalla
+        const scaleFactor = this.sizes.width / 1920; // Usar 1920px como referencia base
+        
+        this.radius = 8 * Math.max(scaleFactor, 0.5); // Mínimo 50% del tamaño base
+        this.imageWidth = 4.5 * Math.max(scaleFactor, 0.5);
+        this.imageHeight = this.imageWidth / this.aspectRatio;
+        
+        // Determinar si aplicar responsive o usar valor de control
+        const controlValue = this.getControlValue('cameraDistance', 0);
+        
+        // Si es la primera vez (null) o el control está en 0, aplicar responsive
+        if (this.cameraDistance === null || controlValue === 0) {
+            // Aplicar cálculo responsive
+            const baseDistance = 4;
+            const responsiveDistance = baseDistance / Math.max(scaleFactor, 0.3);
+            this.cameraDistance = responsiveDistance - baseDistance; // Convertir a offset desde base
+        } else if (controlValue !== 0) {
+            // Si el usuario ha ajustado manualmente a un valor diferente de 0, respetarlo
+            this.cameraDistance = controlValue;
+        }
+        // Si no es primera vez y control está en 0, mantener el valor responsive actual
+        
+        this.cameraY = 0;
+        
+        console.log(`Responsive: width=${this.sizes.width}, scale=${scaleFactor.toFixed(2)}, radius=${this.radius.toFixed(1)}, cameraOffset=${this.cameraDistance.toFixed(1)}, finalZ=${(4 + this.cameraDistance).toFixed(1)}`);
     }
     
     setupControls() {
@@ -48,14 +88,14 @@ class CircularSlider {
             resetBtn.addEventListener('click', () => {
                 document.getElementById('imageSize').value = 25;
                 document.getElementById('radiusBase').value = 35;
-                document.getElementById('cameraDistance').value = 40;
+                document.getElementById('cameraDistance').value = 0;
                 document.getElementById('separation').value = 1.1;
                 document.getElementById('cameraY').value = 0;
                 
                 // Actualizar displays
                 document.getElementById('imageSize-value').textContent = 25;
                 document.getElementById('radiusBase-value').textContent = 35;
-                document.getElementById('cameraDistance-value').textContent = 40;
+                document.getElementById('cameraDistance-value').textContent = 0;
                 document.getElementById('separation-value').textContent = 1.1;
                 document.getElementById('cameraY-value').textContent = 0;
                 
@@ -81,9 +121,21 @@ class CircularSlider {
         }
     }
     
+    
     updateFromControls() {
-        this.updateResponsiveSettings();
-        this.camera.position.z = this.cameraDistance;
+        const imageSize = this.getControlValue('imageSize', 25);
+        const radiusBase = this.getControlValue('radiusBase', 35);
+        const cameraDistance = this.getControlValue('cameraDistance', 0);
+        
+        // Valores fijos sin responsive
+        this.imageWidth = imageSize * 0.2;
+        this.imageHeight = this.imageWidth / this.aspectRatio;
+        this.radius = radiusBase * 0.3;
+        this.cameraDistance = cameraDistance; // Ahora usa el valor directo
+        this.cameraY = this.getControlValue('cameraY', 0);
+        
+        // Actualizar cámara - sumar el valor del control a la distancia base
+        this.camera.position.z = 4 + this.cameraDistance;
         this.camera.position.y = this.cameraY;
         
         // Actualizar geometría de todas las imágenes
@@ -92,30 +144,6 @@ class CircularSlider {
             image.geometry.dispose();
             image.geometry = newGeometry;
         });
-    }
-    
-    updateResponsiveSettings() {
-        // Calcular tamaños basado en viewport y controles
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        
-        // Obtener valores de los controles (si existen)
-        const imageSizePercent = this.getControlValue('imageSize', 25) / 100;
-        const radiusBasePercent = this.getControlValue('radiusBase', 35) / 100;
-        const cameraDistancePercent = this.getControlValue('cameraDistance', 40) / 100;
-        const separationFactor = this.getControlValue('separation', 1.1);
-        
-        // Tamaño de imagen
-        this.imageWidth = vw * imageSizePercent;
-        this.imageHeight = this.imageWidth / this.aspectRatio;
-        
-        // Radio calculado
-        const minRadius = (this.imageWidth * separationFactor) / (2 * Math.sin(Math.PI / this.imageCount));
-        this.radius = Math.max(minRadius, vw * radiusBasePercent);
-        
-        // Cámara
-        this.cameraDistance = this.radius * cameraDistancePercent;
-        this.cameraY = this.getControlValue('cameraY', 0);
     }
     
     getControlValue(controlId, defaultValue) {
@@ -131,16 +159,16 @@ class CircularSlider {
         // Camera
         this.camera = new THREE.PerspectiveCamera(
             75,
-            window.innerWidth / window.innerHeight,
+            this.sizes.width / this.sizes.height,
             0.1,
             1000
         );
-        this.camera.position.z = this.cameraDistance;
+        this.camera.position.z = 4 + this.cameraDistance;
         this.camera.position.y = this.cameraY;
         
         // Renderer
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setSize(this.sizes.width, this.sizes.height);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.container.appendChild(this.renderer.domElement);
         
@@ -300,25 +328,39 @@ class CircularSlider {
     setupEventListeners() {
         // Mouse movement
         document.addEventListener('mousemove', (event) => {
-            this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            this.mouse.x = (event.clientX / this.sizes.width) * 2 - 1;
+            this.mouse.y = -(event.clientY / this.sizes.height) * 2 + 1;
         });
         
-        // Window resize con responsividad
+        // Window resize usando la técnica recomendada
         window.addEventListener('resize', () => {
-            this.updateResponsiveSettings();
-            this.camera.aspect = window.innerWidth / window.innerHeight;
+            // Update sizes
+            this.sizes.width = window.innerWidth;
+            this.sizes.height = window.innerHeight;
+            
+            // Recalcular tamaños responsive
+            this.calculateResponsiveSizes();
+            
+            // Update camera
+            this.camera.aspect = this.sizes.width / this.sizes.height;
             this.camera.position.z = this.cameraDistance;
             this.camera.position.y = this.cameraY;
             this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Update renderer
+            this.renderer.setSize(this.sizes.width, this.sizes.height);
+            this.renderer.setPixelRatio(window.devicePixelRatio);
             
-            // Actualizar geometría de todas las imágenes existentes
+            // Actualizar geometrías de las imágenes existentes
             this.images.forEach(image => {
-                const newGeometry = new THREE.PlaneGeometry(this.imageWidth, this.imageHeight, 1, 1);
-                image.geometry.dispose();
-                image.geometry = newGeometry;
+                if (image.geometry) {
+                    image.geometry.dispose();
+                    image.geometry = new THREE.PlaneGeometry(this.imageWidth, this.imageHeight, 1, 1);
+                }
             });
+            
+            // Forzar actualización de posiciones con el nuevo radio
+            this.updateImagePositions();
         });
     }
     
