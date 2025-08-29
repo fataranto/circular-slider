@@ -79,8 +79,14 @@ class CircularSlider {
     }
 
     createImageSegment(texture, index) {
-        const angleSize = (Math.PI * 2) / this.imageCount;
-        const startAngle = index * angleSize;
+        const totalAngle = Math.PI * 2;
+        const gap = 0.1; // tamaño del hueco en radianes entre imágenes
+        const angleSize = (totalAngle / this.imageCount) - gap;
+        const startAngle = index * ((totalAngle) / this.imageCount);
+
+
+        //const angleSize = (Math.PI * 2) / this.imageCount; // tamaño del ángulo para cada imagen
+        //const startAngle = index * angleSize; 
 
         const geometry = new THREE.CylinderGeometry(
             this.radius,       // radio superior
