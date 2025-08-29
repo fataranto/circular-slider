@@ -16,7 +16,7 @@ class CircularSlider {
         this.radius = 15;         // 👈 radio del cilindro
         this.imageHeight = 6;
         this.rotationY = 0;
-        this.velocity = 0;
+        this.velocity = 0.005;
 
         // Sizes
         this.sizes = {
